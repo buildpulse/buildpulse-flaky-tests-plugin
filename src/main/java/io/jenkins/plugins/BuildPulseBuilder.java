@@ -3,7 +3,11 @@ package io.jenkins.plugins;
 import hudson.Extension;
 import hudson.model.AbstractProject;
 import hudson.tasks.Builder;
+import jenkins.tasks.SimpleBuildStep;
 import hudson.tasks.BuildStepDescriptor;
+
+import java.util.List;
+
 import org.kohsuke.stapler.DataBoundConstructor;
 import org.kohsuke.stapler.DataBoundSetter;
 

@@ -3,9 +3,11 @@ package io.jenkins.plugins;
 import hudson.EnvVars;
 import hudson.Extension;
 import hudson.FilePath;
+import hudson.model.Action;
 import hudson.model.Run;
 import hudson.model.TaskListener;
 import hudson.model.listeners.RunListener;
+import hudson.remoting.VirtualChannel;
 import hudson.util.ArgumentListBuilder;
 import jenkins.YesNoMaybe;
 import jenkins.tasks.SimpleBuildStep;
@@ -17,19 +19,13 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import java.io.InputStream;
+import java.io.File;
 import java.io.FileOutputStream;
 import java.net.URL;
-import java.nio.file.Paths;
-import java.nio.file.Files;
-
 import java.nio.file.*;
 import java.io.IOException;
 import java.util.*;
 import java.util.stream.*;
-
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 
 @Extension(dynamicLoadable = YesNoMaybe.YES)
 public class BuildPulseTestListener extends RunListener<Run<?, ?>> {
@@ -42,7 +38,7 @@ public class BuildPulseTestListener extends RunListener<Run<?, ?>> {
             // You'd need to set these based on your setup
             String accountId = "your_account_id";
             String repositoryId = "your_repository_id";
-            String path = "path_to_your_test_reports";
+            String junitXMLPaths = "path_to_your_test_reports";
             String repositoryPath = "path_to_your_repository";
             String key = "your_key";
             String secret = "your_secret";
@@ -50,9 +46,11 @@ public class BuildPulseTestListener extends RunListener<Run<?, ?>> {
 
             FilePath workspace = run.getExecutor().getCurrentWorkspace();
 
+
             // Execute the script
-            BuildPulseCommand command = new BuildPulseCommand(accountId, repositoryId, path, repositoryPath, key, secret, commit);
+            BuildPulseCommand command = new BuildPulseCommand(accountId, repositoryId, junitXMLPaths, repositoryPath, key, secret, commit);
             workspace.act(command);
+
         } catch (IOException | InterruptedException e) {
             LOGGER.log(Level.SEVERE, "Failed to send test results to BuildPulse", e);
         }
@@ -61,13 +59,13 @@ public class BuildPulseTestListener extends RunListener<Run<?, ?>> {
     private static class BuildPulseCommand implements SimpleBuildStep.LastBuildAction, Serializable, FilePath.FileCallable<Void> {
         private final String accountId;
         private final String repositoryId;
-        private List<String> junitXmlReportPaths;
+        private final String junitXmlReportPaths;
         private final String repositoryPath;
         private final String key;
         private final String secret;
         private final String commit;
 
-        public BuildPulseCommand(String accountId, String repositoryId, List<String> junitXmlReportPaths, String repositoryPath, String key, String secret, String commit) {
+        public BuildPulseCommand(String accountId, String repositoryId, String junitXmlReportPaths, String repositoryPath, String key, String secret, String commit) {
             this.accountId = accountId;
             this.repositoryId = repositoryId;
             this.junitXmlReportPaths = junitXmlReportPaths;
@@ -78,12 +76,11 @@ public class BuildPulseTestListener extends RunListener<Run<?, ?>> {
         }
 
         @Override
-        public Void invoke(FilePath workspace, hudson.remoting.VirtualChannel virtualChannel) throws IOException, InterruptedException {
-            this.validateArguments();
-9
+        public Void invoke(File workspace, hudson.remoting.VirtualChannel virtualChannel) throws IOException, InterruptedException {
+            List<String> validatedJunitXmlReportPaths = this.validateArguments();
             FilePath binaryFilePath = this.downloadBuildPulseBinary();
 
-            String path = this.getPathsString(reportFiles);
+            String path = this.getPathsString(validatedJunitXmlReportPaths);
             String cmd = String.format("BUILDPULSE_ACCESS_KEY_ID=%s BUILDPULSE_SECRET_ACCESS_KEY=%s GITHUB_SHA=%s %s submit %s --account-id %s --repository-id %s --repository-dir %s", this.key, this.secret, this.commit, binaryFilePath, path, this.accountId, this.repositoryId, this.repositoryPath);
 
             ArgumentListBuilder args = new ArgumentListBuilder();
@@ -99,7 +96,7 @@ public class BuildPulseTestListener extends RunListener<Run<?, ?>> {
             return null;
         }
 
-        private FilePath downloadBuildPulseBinary() throws IOException {
+        private FilePath downloadBuildPulseBinary() throws IOException, InterruptedException {
             String binaryFileName = determineBinaryFileName();
             URL binaryUrl = new URL("https://github.com/buildpulse/test-reporter/releases/latest/download/" + binaryFileName);
             String tempDirectoryPath = System.getProperty("java.io.tmpdir");
@@ -122,12 +119,12 @@ public class BuildPulseTestListener extends RunListener<Run<?, ?>> {
             return binaryFilePath;
         }
 
-        private List<String> validateArguments() throws RuntimeException {
-            if (!this.accountId.matches('^[0-9]+$')) {
+        private List<String> validateArguments() throws RuntimeException, IOException {
+            if (!this.accountId.matches("^[0-9]+$")) {
                 throw new RuntimeException("Account ID doesn't match expected format: '^[0-9]+$'");
             }
 
-            if (!this.repositoryId.matches('^[0-9]+$')) {
+            if (!this.repositoryId.matches("^[0-9]+$")) {
                 throw new RuntimeException("Repository ID doesn't match expected format: '^[0-9]+$'");
             }
 
@@ -147,7 +144,7 @@ public class BuildPulseTestListener extends RunListener<Run<?, ?>> {
             return this.resolveFilePaths(this.junitXmlReportPaths);
         }
 
-        private String getPathsString(List<string> reportPaths) {
+        private String getPathsString(List<String> reportPaths) {
             return String.join(" ", reportPaths);
         }
 
@@ -166,20 +163,50 @@ public class BuildPulseTestListener extends RunListener<Run<?, ?>> {
             return binaryFileName;
         }
 
-        private List<String> resolveFilePaths(List<String> junitXmlReportPaths) throws IOException {
-            String[] individualPaths = paths.split(" ");
+        private List<String> resolveFilePaths(String junitXmlReportPaths) throws IOException {
+            String[] individualPaths = junitXmlReportPaths.split(" ");
             List<String> resolvedPaths = new ArrayList<>();
 
-            List<File> reportFiles = new ArrayList<>();
-            for (String glob : junitXmlReportPaths) {
+            for (String glob : individualPaths) {
                 PathMatcher pathMatcher = FileSystems.getDefault().getPathMatcher("glob:" + glob);
                 Files.walk(FileSystems.getDefault().getPath("."))
                     .filter(pathMatcher::matches)
                     .map(Path::toFile)
-                    .forEach(reportFiles::add);
+                    .map(File::getAbsolutePath)
+                    .forEach(resolvedPaths::add);
             }
 
-            return reportFiles;
+            return resolvedPaths;
+        }
+
+        @Override
+        public String getDisplayName() {
+            // TODO Auto-generated method stub
+            throw new UnsupportedOperationException("Unimplemented method 'getDisplayName'");
+        }
+
+        @Override
+        public String getIconFileName() {
+            // TODO Auto-generated method stub
+            throw new UnsupportedOperationException("Unimplemented method 'getIconFileName'");
+        }
+
+        @Override
+        public String getUrlName() {
+            // TODO Auto-generated method stub
+            throw new UnsupportedOperationException("Unimplemented method 'getUrlName'");
+        }
+
+        @Override
+        public void checkRoles(RoleChecker checker) throws SecurityException {
+            // TODO Auto-generated method stub
+            throw new UnsupportedOperationException("Unimplemented method 'checkRoles'");
+        }
+
+        @Override
+        public Collection<? extends Action> getProjectActions() {
+            // TODO Auto-generated method stub
+            throw new UnsupportedOperationException("Unimplemented method 'getProjectActions'");
         }
     }
 }
