@@ -1,0 +1,57 @@
+# Maven target directory
+/target/
+
+# Eclipse/IntelliJ IDEA project files
+.classpath
+.project
+.settings/
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# Maven configuration files
+dependency-reduced-pom.xml
+release.properties
+pom.xml.releaseBackup
+pom.xml.tag
+
+# Log files
+*.log
+
+# Temporary files
+*.tmp
+*.bak
+*.swp
+*~.nib
+
+# OS-specific files
+.DS_Store
+Thumbs.db
+
+# Node.js modules (if using npm/yarn for front-end assets)
+/node_modules/
+
+# Coverage reports (if using a coverage tool)
+coverage/
+.nyc_output/
+
+# Ignore IntelliJ IDEA and Eclipse specific settings
+.idea/
+*.iml
+*.ipr
+*.iws
+.classpath
+.project
+.settings/
+
+# JetBrains Rider
+.idea/
+*.sln.iml
+
+# VSCode
+.vscode/
+
+# Mac specific files
+.DS_Store
+
