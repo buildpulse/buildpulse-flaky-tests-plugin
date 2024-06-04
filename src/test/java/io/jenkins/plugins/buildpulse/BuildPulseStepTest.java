@@ -1,4 +1,4 @@
-package io.jenkins.plugins;
+package io.jenkins.plugins.buildpulse;
 
 import hudson.model.Descriptor;
 import jenkins.model.Jenkins;

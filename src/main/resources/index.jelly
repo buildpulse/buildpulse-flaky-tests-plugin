@@ -1,0 +1,4 @@
+<?jelly escape-by-default='true'?>
+<div>
+    Sending test results to BuildPulse for flaky test detection and CI analytics.
+</div>
