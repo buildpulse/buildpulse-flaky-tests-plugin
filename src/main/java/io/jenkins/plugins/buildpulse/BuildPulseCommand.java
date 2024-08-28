@@ -21,7 +21,7 @@ public class BuildPulseCommand {
     private String accountId;
     private String repositoryId;
     private String junitXmlReportPaths;
-    private String keyId;
+    private String keyId; // lgtm[jenkins/plaintext-storage]
     private String secret;
     private FilePath workspacePath;
 
